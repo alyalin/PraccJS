@@ -1,0 +1,1 @@
+pub mod tauri_traffic_light_positioner_plugin;
