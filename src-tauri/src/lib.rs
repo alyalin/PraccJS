@@ -3,9 +3,8 @@ mod plugins;
 mod tab;
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use ast_replacer::ast_replacer::AstReplacer;
+use ast_replacer::lib::AstReplacer;
 use ast_replacer::utils::transform_to_result;
 use oxc_allocator::Allocator;
 
@@ -17,6 +16,7 @@ use oxc_span::SourceType;
 
 use rustyscript::RuntimeOptions;
 use tab::Tab;
+use tauri::Manager;
 use tokio::sync::Mutex;
 
 use rustyscript::Error;
@@ -41,7 +41,7 @@ async fn handle_editor_changes(
 
     let transformed_result = tokio::task::spawn_blocking(move || {
         let allocator = Allocator::default();
-        let source_type = SourceType::ts();
+        let source_type = SourceType::default();
         let ret = Parser::new(&allocator, &source_text, source_type).parse();
 
         let mut error_messages = Vec::new();
@@ -51,7 +51,6 @@ async fn handle_editor_changes(
         }
 
         let mut runtime = Runtime::new(RuntimeOptions {
-            timeout: Duration::from_millis(50),
             ..Default::default()
         }).unwrap();
 
@@ -62,9 +61,9 @@ async fn handle_editor_changes(
             }
         }
 
-        let semantic_ret = SemanticBuilder::new().build(&ret.program);
+        let _semantic_ret = SemanticBuilder::new().build(&ret.program);
 
-        let ast_builder = AstBuilder::new(&allocator);
+        let _ast_builder = AstBuilder::new(&allocator);
 
         let transformed_code = if error_messages.is_empty() {
             let mut program = allocator.alloc(ret.program);
@@ -74,13 +73,12 @@ async fn handle_editor_changes(
                 .build(&program)
                 .code;
 
-            println!("{:?}", new_code);
-
             let mut runtime = Runtime::new(Default::default()).unwrap();
 
             runtime
                 .eval::<()>(
                     r#"
+                    // Xtal is a function that wraps call expressions
                     globalThis.Xtal = async (line, ...valuePromise) => {
                         if (typeof globalThis.XtalResults === 'undefined') {
                             globalThis.XtalResults = [];
@@ -131,6 +129,12 @@ async fn handle_editor_changes(
     Ok(())
 }
 
+
+#[tauri::command]
+fn show_window(app: tauri::AppHandle) {
+    app.get_webview_window("main").unwrap().show().unwrap();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -138,7 +142,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(plugins::tauri_traffic_light_positioner_plugin::init())
         .plugin(tauri_plugin_svelte::init())
-        .invoke_handler(tauri::generate_handler![handle_editor_changes])
+        .invoke_handler(tauri::generate_handler![handle_editor_changes, show_window])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

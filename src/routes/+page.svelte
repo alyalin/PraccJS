@@ -5,6 +5,7 @@
   import { invoke } from "@tauri-apps/api/core";
     import { storageStore, updateTab } from "../stores/tabs";
     import { debounce } from "../utils/debounce";
+    import { onMount } from "svelte";
 
   const debounceInvoke = debounce((tabId: string, content: string) => {
     const firstLine = content.slice(0, content.indexOf("\n"));
@@ -15,6 +16,10 @@
   async function onEditorModelChange(id: string, value: string) {
     debounceInvoke(id, value);
   }
+
+  onMount(() => {
+    invoke("show_window");
+  })
 </script>
 
 <section class="flex flex-1 text-white">

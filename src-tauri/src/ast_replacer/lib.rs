@@ -267,6 +267,11 @@ impl<'a> AstReplacer<'a> {
         call_expr: &CallExpression<'a>,
         line: usize,
     ) {
+        // if let Expression::Identifier(identifier) = &call_expr.callee {
+        //     if identifier.name == "setTimeout" {
+        //         return;
+        //     }
+        // }
         let new_expr =
             self.create_debug_call(line, {
                 let mut items = self.ast_builder.vec();
@@ -368,7 +373,7 @@ impl<'a> VisitMut<'a> for AstReplacer<'a> {
 
         if let Expression::CallExpression(call_expr) = &it.expression {
             if let Expression::Identifier(identifier) = &call_expr.callee {
-                if identifier.name == "debug" {
+                if identifier.name == "Xtal" {
                     // Already wrapped, no need to wrap again
                     return;
                 }

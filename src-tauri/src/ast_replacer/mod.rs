@@ -1,2 +1,2 @@
-pub mod ast_replacer;
+pub mod lib;
 pub mod utils;

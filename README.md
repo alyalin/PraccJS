@@ -1,7 +1,9 @@
-# Tauri + SvelteKit + TypeScript
+# PraccJS — Practice your JS 
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
+PraccJS is a desktop REPL client for organizing and executing JS code snippets. It's built using Tauri, Rust, Svelte, Oxc and Rustyscript.
 
-## Recommended IDE Setup
+![screenshot](https://github.com/user-attachments/assets/c70294b7-f044-45ed-959f-e7fdb34fd073)
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+## Notes
+
+It not support async js, typescript at the moment. Feel free to create issues and share your thoughts.
