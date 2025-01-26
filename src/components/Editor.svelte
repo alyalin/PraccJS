@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { onMount } from "svelte";
     import type { ITab } from "../stores/tabs";
     import Monaco from "./Monaco.svelte";
     import { editor } from "monaco-editor";
@@ -10,10 +9,6 @@
 
     let { onModelChange, id, content }: EditorProps =
         $props();
-
-    onMount(() => {
-
-    });
     
     function handleModelChange(content: string) {
         onModelChange(id, content);
