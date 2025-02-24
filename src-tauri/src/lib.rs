@@ -2,7 +2,10 @@ mod ast_replacer;
 mod plugins;
 mod tab;
 
-use std::sync::Arc;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::RecvTimeoutError;
+use std::thread;
+use std::time::Duration;
 
 use ast_replacer::lib::AstReplacer;
 use ast_replacer::utils::transform_to_result;
@@ -14,15 +17,18 @@ use oxc_parser::Parser;
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
 
+use rustyscript::deno_core::error::AnyError;
 use rustyscript::RuntimeOptions;
 use tab::Tab;
 use tauri::Manager;
-use tokio::sync::Mutex;
 
 use rustyscript::Error;
 use rustyscript::Runtime;
 use serde_json::Value;
 use tauri_plugin_svelte::ManagerExt;
+
+const STORE_NAME: &str = "storage2";
+const TABS_KEY: &str = "tabs";
 
 #[tauri::command]
 async fn handle_editor_changes(
@@ -30,52 +36,66 @@ async fn handle_editor_changes(
     tab_id: String,
     app: tauri::AppHandle,
 ) -> Result<(), Error> {
-    const STORE_NAME: &str = "storage2";
-    const TABS_KEY: &str = "tabs";
 
-    let tabs_data = app
+    // Retrieve current tabs.
+    let mut tabs_data = app
         .svelte()
         .try_get::<Vec<Tab>>(STORE_NAME, TABS_KEY)
         .unwrap();
-    let tabs = Arc::new(Mutex::new(tabs_data));
 
-    let transformed_result = tokio::task::spawn_blocking(move || {
-        let allocator = Allocator::default();
-        let source_type = SourceType::default();
-        let ret = Parser::new(&allocator, &source_text, source_type).parse();
+    // Create a channel to receive the thread-safe handle.
+    let (tx_handle, rx_handle) = channel();
+    // Create a channel to receive the worker result.
+    let (tx_result, rx_result) = channel();
 
-        let mut error_messages = Vec::new();
-        for error in ret.errors {
-            let error = error.with_source_code(source_text.clone());
-            error_messages.push(format!("{:?}", error));
-        }
+    // Clone the source text for the worker thread.
+    let source_text_worker = source_text.clone();
 
+    // Spawn a dedicated worker thread.
+    let join_handle = thread::spawn(move || -> Result<(String, Vec<String>), Error> {
+        // Create a runtime for evaluating the script.
         let mut runtime = Runtime::new(RuntimeOptions {
+            timeout: Duration::from_secs(2),
             ..Default::default()
         }).unwrap();
 
-        match runtime.eval::<()>(source_text.clone()) {
-            Ok(_) => {}
-            Err(err) => {
-                error_messages.push(err.as_highlighted(Default::default()));
-            }
+        // Immediately send the thread-safe handle so the main thread can cancel if needed.
+        let ts_handle = runtime
+            .deno_runtime()
+            .v8_isolate()
+            .thread_safe_handle();
+        tx_handle.send(ts_handle).expect("Failed to send thread-safe handle");
+
+        // Evaluate the main source text.
+        let mut error_messages = Vec::new();
+        if let Err(err) = runtime.eval::<()>(source_text_worker.clone()) {
+            error_messages.push(err.as_highlighted(Default::default()));
         }
 
-        let _semantic_ret = SemanticBuilder::new().build(&ret.program);
+        // Perform parsing, semantic analysis, and AST processing.
+        let allocator = Allocator::default();
+        let source_type = SourceType::default();
+        let ret = Parser::new(&allocator, &source_text_worker, source_type).parse();
 
+        for error in ret.errors {
+            let error = error.with_source_code(source_text_worker.clone());
+            error_messages.push(format!("{:?}", error));
+        }
+        let _semantic_ret = SemanticBuilder::new().build(&ret.program);
         let _ast_builder = AstBuilder::new(&allocator);
 
+        // If no errors so far, transform the code.
         let transformed_code = if error_messages.is_empty() {
-            let mut program = allocator.alloc(ret.program);
-            let ast_pass = AstReplacer::new(&allocator, source_text.clone()).build(program);
+            let program = allocator.alloc(ret.program);
+            let _ast_pass = AstReplacer::new(&allocator, source_text_worker.clone()).build(program);
             let new_code = CodeGenerator::new()
                 .with_options(CodegenOptions::default())
                 .build(&program)
                 .code;
 
-            let mut runtime = Runtime::new(Default::default()).unwrap();
-
-            runtime
+            // Create a second runtime to evaluate a helper module.
+            let mut runtime2 = Runtime::new(Default::default()).unwrap();
+            runtime2
                 .eval::<()>(
                     r#"
                     // Xtal is a function that wraps call expressions
@@ -83,47 +103,58 @@ async fn handle_editor_changes(
                         if (typeof globalThis.XtalResults === 'undefined') {
                             globalThis.XtalResults = [];
                         }
-
-                        const resolvedValues = await Promise.all(valuePromise.map(async (value) => await value));
-
+                        const resolvedValues = await Promise.all(
+                            valuePromise.map(async (value) => await value)
+                        );
                         resolvedValues.forEach(value => {
                             globalThis.XtalResults.push({ line, value });
                         });
                     };
-                "#,
+                    "#,
                 )
                 .unwrap();
 
-            match runtime.eval::<()>(new_code) {
-                Ok(_) => {}
-                Err(err) => {
-                    error_messages.push(err.as_highlighted(Default::default()));
-                }
+            if let Err(err) = runtime2.eval::<()>(new_code) {
+                error_messages.push(err.as_highlighted(Default::default()));
             }
 
-            let debug_results: Vec<Value> = match runtime.eval("globalThis.XtalResults") {
-                Ok(value) => value,
-                Err(err) => Vec::new(),
-            };
+            let debug_results: Vec<Value> = runtime2
+                .eval("globalThis.XtalResults")
+                .unwrap_or_else(|_| Vec::new());
 
-            debug_results
+            transform_to_result(debug_results)
         } else {
-            Vec::new()
+            String::new()
         };
 
-        (transform_to_result(transformed_code), error_messages)
-    })
-    .await
-    .expect("Blocking task failed");
+        let result = (transformed_code, error_messages);
+        // Send the result back to the main thread.
+        tx_result.send(result.clone()).expect("Failed to send result");
+        Ok(result)
+    });
 
-    let mut tabs_locked = tabs.lock().await;
-    if let Some(tab) = tabs_locked.iter_mut().find(|tab| tab.id == tab_id) {
-        let (transformed_code, error_messages) = transformed_result;
-        tab.result = transformed_code;
+    // In the main thread, receive the thread-safe handle.
+    let ts_handle = rx_handle.recv().expect("Failed to receive thread-safe handle");
+
+    // Wait up to 2 seconds for the worker to complete.
+    let worker_result = rx_result.recv_timeout(Duration::from_secs(2));
+    let (transformed_result, error_messages) = match worker_result {
+        Ok(res) => res, // Worker finished quickly.
+        Err(RecvTimeoutError::Timeout) => {
+            // Timeout expired: terminate the execution.
+            ts_handle.terminate_execution();
+            // Wait for the worker thread to finish.
+            join_handle.join().expect("Worker thread panicked")?
+        }
+        Err(e) => return Err(AnyError::msg(format!("Worker channel error: {:?}", e)).into()),
+    };
+
+    // Update the appropriate tab.
+    if let Some(tab) = tabs_data.iter_mut().find(|tab| tab.id == tab_id) {
+        tab.result = transformed_result;
         tab.errors = error_messages.join("\n");
     }
-
-    let tabs_json = serde_json::to_value(&*tabs_locked).unwrap();
+    let tabs_json = serde_json::to_value(&tabs_data).unwrap();
     let _ = app.svelte().set(STORE_NAME, TABS_KEY, tabs_json);
 
     Ok(())
