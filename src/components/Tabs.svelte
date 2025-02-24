@@ -1,7 +1,8 @@
 <script lang="ts">
+    import { tick } from "svelte";
     import type { ITab } from "../stores/tabs";
 
-    interface TabsProps {
+    type TabsProps = {
         tabs: ITab[],
         addTab: () => void,
         removeTab: (tabId: string, tabs: ITab[]) => void,
@@ -10,7 +11,7 @@
 
     let { tabs, addTab, removeTab, activateTab }: TabsProps = $props();
     let tabsScrollContainer: HTMLElement;
-
+    
     function handleAddTab() {
         addTab();
 
@@ -18,6 +19,16 @@
             tabsScrollContainer.scrollLeft = tabsScrollContainer.scrollWidth;
         }, 0);
     }
+
+    $effect.pre(() => {
+        tick().then(() => {
+            tabsScrollContainer.childNodes.forEach((tab: HTMLElement) => {
+                if (tab?.classList?.contains('tab-active')) {
+                    tab.scrollIntoView({ block: 'start', inline: 'start' });
+                }
+            })
+        })
+    })
 
 </script>
 
@@ -27,7 +38,11 @@
 >
     <ul class="flex flex-nowrap flex-grow-0 hide-scroll relative overflow-x-auto text-sm space-x-1 font-medium p-1" bind:this={tabsScrollContainer}>
         {#each tabs as tab (tab.id)}
-            <li class="relative group flex-shrink-0">
+            <li class={`relative group flex-shrink-0 ${
+                        tab.active
+                            ? "tab-active"
+                            : ""
+                    }`}>
                 <button
                     class={`flex items-center px-3 rounded-sm max-w-32 flex-shrink-0 pr-10 py-1.5 ${
                         tab.active
