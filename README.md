@@ -9,7 +9,7 @@ PraccJS is a desktop REPL client for organizing and executing JS code snippets. 
 It not support async js, typescript at the moment. Feel free to create issues and share your thoughts.
 
 ## Prerequisites
-- Intall Rust. Verify installation with rustc --version or cargo -V.
+- Intall Rust. Verify installation with `rustc --version` or `cargo -V`.
 - Install Node.js 18+
 
 ## Installing Dependencies
