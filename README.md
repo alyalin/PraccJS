@@ -2,7 +2,7 @@
 
 PraccJS is a desktop REPL client for organizing and executing JS code snippets. It's built using Tauri, Rust, Svelte, Oxc and Rustyscript.
 
-![screenshot](https://github.com/user-attachments/assets/19e57623-a804-4f75-aa91-5b70cf726947)
+https://github.com/user-attachments/assets/19e57623-a804-4f75-aa91-5b70cf726947
 
 ## Notes
 
