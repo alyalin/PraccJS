@@ -1,9 +1,11 @@
 <script lang="ts">
     import { editor } from "monaco-editor";
-    import type { ITab } from "../stores/tabs";
     import Monaco from "./Monaco.svelte";
 
-    interface ResultProps extends Pick<ITab, "result" | "errors"> {}
+    type ResultProps = {
+        result: string,
+        errors: string
+    }
 
     let { result, errors }: ResultProps = $props();
 

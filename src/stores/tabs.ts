@@ -1,7 +1,7 @@
 import { uuidv4 } from '../utils/uuid';
 import { Store } from 'tauri-plugin-svelte';
 
-export interface ITab {
+export type ITab = {
     id: string;
     name: string;
     content: string;

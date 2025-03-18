@@ -9,7 +9,7 @@
     let monacoHTMLElement: HTMLDivElement;
     let monacoEditor: editor.IStandaloneCodeEditor;
 
-    interface MonacoProps {
+    type MonacoProps = {
         content: string,
         onModelChange?: (value: string) => void,
         readonly?: boolean,
