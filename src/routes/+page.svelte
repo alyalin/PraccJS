@@ -3,13 +3,13 @@
   import Editor from "../components/Editor.svelte";
   import Result from "../components/Result.svelte";
   import { invoke } from "@tauri-apps/api/core";
-    import { storageStore, updateTab } from "../stores/tabs";
-    import { debounce } from "../utils/debounce";
-    import { onMount } from "svelte";
+  import { storageStore, updateTab } from "../stores/tabs";
+  import { debounce } from "../utils/debounce";
+  import { onMount } from "svelte";
 
   const debounceInvoke = debounce((tabId: string, content: string) => {
     const firstLine = content.slice(0, content.indexOf("\n"));
-    updateTab(tabId, {content, name: firstLine ? firstLine : "New Tab"});
+    updateTab(tabId, { content, name: firstLine ? firstLine : "New Tab" });
     invoke("handle_editor_changes", { sourceText: content, tabId });
   }, 500);
 
@@ -19,7 +19,7 @@
 
   onMount(() => {
     invoke("show_window");
-  })
+  });
 </script>
 
 <section class="flex flex-1 text-white">
