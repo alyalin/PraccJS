@@ -1,6 +1,7 @@
 <script lang="ts">
     import { tick } from "svelte";
     import type { ITab } from "../stores/tabs";
+    import { platform } from "@tauri-apps/plugin-os";
 
     type TabsProps = {
         tabs: ITab[],
@@ -9,6 +10,7 @@
         activateTab: (tabId: string) => void
     }
 
+    const currentPlatform = platform();
     let { tabs, addTab, removeTab, activateTab }: TabsProps = $props();
     let tabsScrollContainer: HTMLElement;
     
@@ -34,7 +36,7 @@
 
 <nav
     class="flex flex-1 items-center overflow-x-auto hide-scroll overflow-y-hidden"
-    data-tauri-drag-region
+    data-tauri-drag-region={ currentPlatform === "macos" || null }
 >
     <ul class="flex flex-nowrap flex-grow-0 hide-scroll relative overflow-x-auto text-sm space-x-1 font-medium p-1" bind:this={tabsScrollContainer}>
         {#each tabs as tab (tab.id)}
